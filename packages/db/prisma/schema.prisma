@@ -1,0 +1,414 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String            @id @default(uuid())
+  email           String            @unique
+  emailVerified   DateTime?         @map("email_verified_at")
+  passwordHash    String?           @map("password_hash")
+  displayName     String            @map("display_name")
+  avatarUrl       String?           @map("avatar_url")
+  bio             String?
+  timezone        String            @default("UTC")
+  theme           String            @default("system")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  lastLoginAt     DateTime?         @map("last_login_at")
+  isActive        Boolean           @default(true) @map("is_active")
+  isAdmin         Boolean           @default(false) @map("is_admin")
+
+  accounts        Account[]
+  ownedWorkspaces Workspace[]       @relation("WorkspaceOwner")
+  memberships     WorkspaceMember[]
+  authoredPrompts Prompt[]          @relation("PromptAuthor")
+  createdVersions PromptVersion[]   @relation("VersionAuthor")
+  executions      PromptExecution[]
+  createdCollections Collection[]   @relation("CollectionCreator")
+  stars           PromptStar[]
+  comments        Comment[]
+  createdComponents PromptComponent[]
+  auditLogs       AuditLog[]
+  createdTestCases TestCase[]
+  triggeredRuns   TestRun[]
+  apiKeys         ApiKey[]
+  providerKeys    ProviderApiKey[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String   @id @default(uuid())
+  userId            String   @map("user_id")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  accessToken       String?  @map("access_token")
+  refreshToken      String?  @map("refresh_token")
+  expiresAt         DateTime? @map("expires_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@unique([provider, providerAccountId])
+  @@map("oauth_accounts")
+}
+
+model Workspace {
+  id                    String            @id @default(uuid())
+  name                  String
+  slug                  String            @unique
+  description           String?
+  logoUrl               String?           @map("logo_url")
+  ownerId               String            @map("owner_id")
+  owner                 User              @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  plan                  String            @default("free")
+  stripeCustomerId      String?           @map("stripe_customer_id")
+  stripeSubscriptionId  String?           @map("stripe_subscription_id")
+  monthlyTokenLimit     BigInt            @default(1000000) @map("monthly_token_limit")
+  monthlyTokenUsed      BigInt            @default(0) @map("monthly_token_used")
+  settings              Json              @default("{}")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  members               WorkspaceMember[]
+  apiKeys               ApiKey[]
+  providerKeys          ProviderApiKey[]
+  collections           Collection[]
+  prompts               Prompt[]
+  executions            PromptExecution[]
+  tags                  Tag[]
+  components            PromptComponent[]
+  auditLogs             AuditLog[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id           String    @id @default(uuid())
+  workspaceId  String    @map("workspace_id")
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId       String    @map("user_id")
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role         String    @default("viewer")
+  invitedBy    String?   @map("invited_by")
+  invitedAt    DateTime  @default(now()) @map("invited_at")
+  joinedAt     DateTime? @map("joined_at")
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model ApiKey {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix")
+  lastUsedAt  DateTime? @map("last_used_at")
+  expiresAt   DateTime? @map("expires_at")
+  scopes      String[]  @default(["read", "write"])
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  executions  PromptExecution[]
+
+  @@map("api_keys")
+}
+
+model ProviderApiKey {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String    @map("user_id")
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider    String
+  name        String?
+  encryptedKey String   @map("encrypted_key")
+  isDefault   Boolean   @default(false) @map("is_default")
+  isVerified  Boolean   @default(false) @map("is_verified")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@map("provider_api_keys")
+}
+
+model Collection {
+  id          String       @id @default(uuid())
+  workspaceId String       @map("workspace_id")
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  parentId    String?      @map("parent_id")
+  parent      Collection?  @relation("CollectionHierarchy", fields: [parentId], references: [id])
+  children    Collection[] @relation("CollectionHierarchy")
+  name        String
+  description String?
+  color       String?
+  icon        String?
+  orderIndex  Int          @default(0) @map("order_index")
+  createdBy   String       @map("created_by")
+  creator     User         @relation("CollectionCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  prompts     Prompt[]
+
+  @@map("collections")
+}
+
+model Prompt {
+  id                String            @id @default(uuid())
+  workspaceId       String            @map("workspace_id")
+  workspace         Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  collectionId      String?           @map("collection_id")
+  collection        Collection?       @relation(fields: [collectionId], references: [id])
+  authorId          String            @map("author_id")
+  author            User              @relation("PromptAuthor", fields: [authorId], references: [id])
+  
+  name              String
+  slug              String
+  description       String?
+  useCase           String?           @map("use_case")
+  
+  category          String?
+  domain            String?
+  language          String            @default("en")
+  skills            String[]          @default([])
+  tags              String[]          @default([])
+  
+  status            String            @default("draft")
+  visibility        String            @default("private")
+  isTemplate        Boolean           @default(false) @map("is_template")
+  isFeatured        Boolean           @default(false) @map("is_featured")
+  isPinned          Boolean           @default(false) @map("is_pinned")
+  
+  currentVersionId  String?           @map("current_version_id")
+  currentVersion    PromptVersion?    @relation("CurrentVersion", fields: [currentVersionId], references: [id])
+  
+  executionCount    Int               @default(0) @map("execution_count")
+  forkCount         Int               @default(0) @map("fork_count")
+  starCount         Int               @default(0) @map("star_count")
+  averageRating     Decimal?          @map("average_rating") @db.Decimal(3,2)
+  
+  forkedFromId      String?           @map("forked_from_id")
+  forkedFrom        Prompt?           @relation("PromptForks", fields: [forkedFromId], references: [id])
+  forks             Prompt[]          @relation("PromptForks")
+  
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  archivedAt        DateTime?         @map("archived_at")
+
+  versions          PromptVersion[]   @relation("PromptToVersions")
+  executions        PromptExecution[]
+  stars             PromptStar[]
+  comments          Comment[]
+  testCases         TestCase[]
+  testRuns          TestRun[]
+
+  @@unique([workspaceId, slug])
+  @@map("prompts")
+}
+
+model PromptVersion {
+  id                String    @id @default(uuid())
+  promptId          String    @map("prompt_id")
+  prompt            Prompt    @relation("PromptToVersions", fields: [promptId], references: [id], onDelete: Cascade)
+  versionNumber     String    @map("version_number")
+  versionLabel      String?   @map("version_label")
+  commitMessage     String?   @map("commit_message")
+  status            String    @default("draft")
+  
+  provider          String?
+  model             String?
+  modelConfig       Json      @default("{}") @map("model_config")
+  
+  systemPrompt      String?   @map("system_prompt")
+  userPrompt        String?   @map("user_prompt")
+  assistantPrefill  String?   @map("assistant_prefill")
+  
+  variables         Json      @default("[]")
+  examples          Json      @default("[]")
+  tools             Json      @default("[]")
+  chainConfig       Json      @default("{}") @map("chain_config")
+  outputConfig      Json      @default("{}") @map("output_config")
+  retryConfig       Json      @default("{}") @map("retry_config")
+  cacheConfig       Json      @default("{}") @map("cache_config")
+  
+  tokenCountSystem  Int?      @map("token_count_system")
+  tokenCountUser    Int?      @map("token_count_user")
+  estimatedCostPerRun Decimal? @map("estimated_cost_per_run") @db.Decimal(10,6)
+  
+  createdBy         String    @map("created_by")
+  creator           User      @relation("VersionAuthor", fields: [createdBy], references: [id])
+  createdAt         DateTime  @default(now()) @map("created_at")
+
+  promptAsCurrent   Prompt[]  @relation("CurrentVersion")
+  executions        PromptExecution[]
+  comments          Comment[]
+  testRuns          TestRun[]
+
+  @@unique([promptId, versionNumber])
+  @@map("prompt_versions")
+}
+
+model PromptExecution {
+  id                    String    @id @default(uuid())
+  promptId              String?   @map("prompt_id")
+  prompt                Prompt?   @relation(fields: [promptId], references: [id])
+  versionId             String?   @map("version_id")
+  version               PromptVersion? @relation(fields: [versionId], references: [id])
+  workspaceId           String    @map("workspace_id")
+  workspace             Workspace @relation(fields: [workspaceId], references: [id])
+  userId                String?   @map("user_id")
+  user                  User?     @relation(fields: [userId], references: [id])
+  
+  provider              String
+  model                 String
+  resolvedSystemPrompt  String?   @map("resolved_system_prompt")
+  resolvedUserPrompt    String?   @map("resolved_user_prompt")
+  responseContent       String?   @map("response_content")
+  
+  inputTokens           Int?      @map("input_tokens")
+  outputTokens          Int?      @map("output_tokens")
+  totalTokens           Int?      @map("total_tokens")
+  latencyMs             Int?      @map("latency_ms")
+  costUsd               Decimal?  @map("cost_usd") @db.Decimal(10,8)
+  
+  status                String    @default("success")
+  errorMessage          String?   @map("error_message")
+  finishReason          String?   @map("finish_reason")
+  
+  variableValues        Json      @default("{}") @map("variable_values")
+  metadata              Json      @default("{}")
+  
+  environment           String    @default("sandbox")
+  apiKeyId              String?   @map("api_key_id")
+  apiKey                ApiKey?   @relation(fields: [apiKeyId], references: [id])
+  
+  createdAt             DateTime  @default(now()) @map("created_at")
+
+  @@map("prompt_executions")
+}
+
+model Tag {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  color       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([workspaceId, name])
+  @@map("tags")
+}
+
+model PromptStar {
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  promptId  String   @map("prompt_id")
+  prompt    Prompt   @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([userId, promptId])
+  @@map("prompt_stars")
+}
+
+model Comment {
+  id              String         @id @default(uuid())
+  promptId        String         @map("prompt_id")
+  prompt          Prompt         @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  versionId       String?        @map("version_id")
+  version         PromptVersion? @relation(fields: [versionId], references: [id])
+  parentId        String?        @map("parent_id")
+  parent          Comment?       @relation("CommentThread", fields: [parentId], references: [id])
+  replies         Comment[]      @relation("CommentThread")
+  authorId        String         @map("author_id")
+  author          User           @relation(fields: [authorId], references: [id])
+  content         String
+  isResolved      Boolean        @default(false) @map("is_resolved")
+  lineReference   Json?          @map("line_reference")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+  deletedAt       DateTime?      @map("deleted_at")
+
+  @@map("comments")
+}
+
+model PromptComponent {
+  id          String    @id @default(uuid())
+  workspaceId String    @map("workspace_id")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  content     String
+  category    String?
+  tags        String[]  @default([])
+  usageCount  Int       @default(0) @map("usage_count")
+  createdBy   String    @map("created_by")
+  creator     User      @relation(fields: [createdBy], references: [id])
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@map("prompt_components")
+}
+
+model AuditLog {
+  id            String    @id @default(uuid())
+  workspaceId   String?   @map("workspace_id")
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id])
+  userId        String?   @map("user_id")
+  user          User?     @relation(fields: [userId], references: [id])
+  action        String
+  resourceType  String?   @map("resource_type")
+  resourceId    String?   @map("resource_id")
+  changes       Json?
+  ipAddress     String?   @map("ip_address")
+  userAgent     String?   @map("user_agent")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@map("audit_logs")
+}
+
+model TestCase {
+  id                String    @id @default(uuid())
+  promptId          String    @map("prompt_id")
+  prompt            Prompt    @relation(fields: [promptId], references: [id], onDelete: Cascade)
+  name              String
+  description       String?
+  variableValues    Json      @default("{}") @map("variable_values")
+  expectedOutput    String?   @map("expected_output")
+  evaluationCriteria Json      @default("{}") @map("evaluation_criteria")
+  tags              String[]  @default([])
+  isActive          Boolean   @default(true) @map("is_active")
+  createdBy         String    @map("created_by")
+  creator           User      @relation(fields: [createdBy], references: [id])
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  @@map("test_cases")
+}
+
+model TestRun {
+  id              String    @id @default(uuid())
+  promptId        String    @map("prompt_id")
+  prompt          Prompt    @relation(fields: [promptId], references: [id])
+  versionId       String    @map("version_id")
+  version         PromptVersion @relation(fields: [versionId], references: [id])
+  triggeredBy     String    @map("triggered_by")
+  trigger         User      @relation(fields: [triggeredBy], references: [id])
+  status          String    @default("pending")
+  totalCases      Int       @default(0) @map("total_cases")
+  passedCases     Int       @default(0) @map("passed_cases")
+  failedCases     Int       @default(0) @map("failed_cases")
+  totalCostUsd    Decimal?  @map("total_cost_usd") @db.Decimal(10,6)
+  totalTokens     Int?      @map("total_tokens")
+  startedAt       DateTime? @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  @@map("test_runs")
+}
