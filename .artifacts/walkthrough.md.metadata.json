@@ -1,0 +1,5 @@
+{
+  "artifactType":  "ARTIFACT_TYPE_WALKTHROUGH",
+  "summary":  "A comprehensive walkthrough of the PromptForge platform, detailing its architecture, features, and how to use it.\nCovers the Monorepo setup, Database schema, tRPC API, Auth.js integration, and the high-fidelity UI components.",
+  "updatedAt":  "2026-05-12T12:38:10.078336Z"
+}
