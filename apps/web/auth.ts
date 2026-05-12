@@ -1,4 +1,4 @@
-import NextAuth from "next-auth";
+import NextAuth, { type NextAuthResult } from "next-auth";
 import { PrismaAdapter } from "@auth/prisma-adapter";
 import { prisma } from "@repo/db";
 import Google from "next-auth/providers/google";
@@ -27,6 +27,6 @@ const result = NextAuth({
 });
 
 export const handlers = result.handlers;
-export const auth = result.auth;
+export const auth: NextAuthResult["auth"] = result.auth;
 export const signIn = result.signIn;
 export const signOut = result.signOut;
