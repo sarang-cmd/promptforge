@@ -4,7 +4,7 @@ import { prisma } from "@repo/db";
 import Google from "next-auth/providers/google";
 import GitHub from "next-auth/providers/github";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const result = NextAuth({
   adapter: PrismaAdapter(prisma),
   providers: [
     Google({
@@ -25,3 +25,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
   },
 });
+
+export const handlers = result.handlers;
+export const auth = result.auth;
+export const signIn = result.signIn;
+export const signOut = result.signOut;
